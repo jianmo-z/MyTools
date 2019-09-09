@@ -13,10 +13,10 @@ import time
 from functools import wraps
 from urllib import request
 
-# 订阅链接地址
-uri = ""
-config_path = "/etc/v2ray/config.json"
-scripts_log = "/opt/scripts/scripts.log"
+
+uri = ""  # 订阅链接地址
+config_path = "/etc/v2ray/config.json"  # v2ray配置路径
+scripts_log = "/opt/scripts/scripts.log"  # 日志打印路径
 
 green = "\033[0;32m"  # green
 red = "\033[1;31m"  # red
@@ -100,6 +100,11 @@ Chrome/76.0.3809.132 Safari/537.36"
 # 解析订阅信息
 @logger("parse_subscription")
 def parse_subscription(Subscription):
+	"""
+	解析订阅链接的信息
+	:param Subscription:
+	:return:
+	"""
 	res = base64.b64decode(Subscription + '=' * (4 - len(Subscription) % 4))
 	res = res.decode("utf-8")
 	vmesses = res.splitlines()
@@ -109,6 +114,12 @@ def parse_subscription(Subscription):
 # 解析vmess为json
 @logger("parse_vmess")
 def parse_vmess(vmess, code=True):
+	"""
+	将单个vmess解析为json格式
+	:param vmess:
+	:param code:
+	:return:
+	"""
 	vmess = vmess[8:]
 	if vmess[-1] == "=" or not (len(vmess) % 4):
 		config = base64.b64decode(vmess)
@@ -122,13 +133,22 @@ def parse_vmess(vmess, code=True):
 # json反序列化
 @logger("load_config")
 def load_config(config):
+	"""
+	反序列化
+	:param config:
+	:return:
+	"""
 	return json.loads(config)
 
 
 # 写入配置文件
 @logger("write2config")
 def write2config(config):
-	# print(config)
+	"""
+	读取v2ray配置文件然后修改重新写入
+	:param config:
+	:return:
+	"""
 	with open(config_path, "r+") as fd:
 		oldConfig = json.loads(fd.read())
 
@@ -160,6 +180,14 @@ def write2config(config):
 # 测试是否可以连接
 @logger("is_reachable")
 def is_reachable(ip, times=3, timeout=3, count=1):
+	"""
+	测试与节点ip是否可以连接，判断节点ip是否被墙
+	:param ip:
+	:param times:
+	:param timeout:
+	:param count:
+	:return:
+	"""
 	with open(scripts_log, "a+") as fd:
 		for i in range(int(times)):
 			ret = subprocess.Popen("ping -c {} -W {} {}".format(count, timeout, ip), shell=True, stdout=fd, stderr=fd)
@@ -178,6 +206,11 @@ def is_reachable(ip, times=3, timeout=3, count=1):
 # restart v2ray
 @logger("restart v2ray")
 def restart_v2ray(times):
+	"""
+	重新启动v2ray，使用新的配置文件
+	:param times:
+	:return:
+	"""
 	log(LOG_INFO, "restart_v2ray", "begin restart v2ray...")
 	with open(scripts_log, "a+") as fd:
 		for i in range(int(times)):
@@ -229,6 +262,9 @@ def init():
 
 
 if __name__ == "__main__":
+	"""
+	加的各种sleep目的之一防止过多请求订阅服务器然后被拉黑
+	"""
 	init()  # 初始化
 
 	cmd = 'curl -x socks5://127.0.0.1:1080 -I -m 10 -o /dev/null -s -w %{http_code} www.google.com'
