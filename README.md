@@ -1,0 +1,2 @@
+# auto-update-v2rayconf
+自动监控v2ray节点是否可以正常使用，不正常请求订阅服务器然后进行更新配置文件重启v2ray
