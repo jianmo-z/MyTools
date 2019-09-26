@@ -13,10 +13,11 @@ import time
 from functools import wraps
 from urllib import request
 
-
-uri = ""  # 订阅链接地址
-config_path = "/etc/v2ray/config.json"  # v2ray配置路径
-scripts_log = "/opt/scripts/scripts.log"  # 日志打印路径
+# 配置信息
+BLACK_LIST = ['']
+uri = ""
+config_path = "/etc/v2ray/config.json"
+scripts_log = "/opt/scripts/scripts.log"
 
 green = "\033[0;32m"  # green
 red = "\033[1;31m"  # red
@@ -69,7 +70,9 @@ def logger(funcname):
 				exit(0)
 			finally:
 				log(LOG_INFO, funcname, "run to end...")
+
 		return wrapper
+
 	return task
 
 
@@ -100,11 +103,6 @@ Chrome/76.0.3809.132 Safari/537.36"
 # 解析订阅信息
 @logger("parse_subscription")
 def parse_subscription(Subscription):
-	"""
-	解析订阅链接的信息
-	:param Subscription:
-	:return:
-	"""
 	res = base64.b64decode(Subscription + '=' * (4 - len(Subscription) % 4))
 	res = res.decode("utf-8")
 	vmesses = res.splitlines()
@@ -114,12 +112,6 @@ def parse_subscription(Subscription):
 # 解析vmess为json
 @logger("parse_vmess")
 def parse_vmess(vmess, code=True):
-	"""
-	将单个vmess解析为json格式
-	:param vmess:
-	:param code:
-	:return:
-	"""
 	vmess = vmess[8:]
 	if vmess[-1] == "=" or not (len(vmess) % 4):
 		config = base64.b64decode(vmess)
@@ -133,22 +125,13 @@ def parse_vmess(vmess, code=True):
 # json反序列化
 @logger("load_config")
 def load_config(config):
-	"""
-	反序列化
-	:param config:
-	:return:
-	"""
 	return json.loads(config)
 
 
 # 写入配置文件
 @logger("write2config")
 def write2config(config):
-	"""
-	读取v2ray配置文件然后修改重新写入
-	:param config:
-	:return:
-	"""
+	# print(config)
 	with open(config_path, "r+") as fd:
 		oldConfig = json.loads(fd.read())
 
@@ -180,14 +163,6 @@ def write2config(config):
 # 测试是否可以连接
 @logger("is_reachable")
 def is_reachable(ip, times=3, timeout=3, count=1):
-	"""
-	测试与节点ip是否可以连接，判断节点ip是否被墙
-	:param ip:
-	:param times:
-	:param timeout:
-	:param count:
-	:return:
-	"""
 	with open(scripts_log, "a+") as fd:
 		for i in range(int(times)):
 			ret = subprocess.Popen("ping -c {} -W {} {}".format(count, timeout, ip), shell=True, stdout=fd, stderr=fd)
@@ -206,11 +181,6 @@ def is_reachable(ip, times=3, timeout=3, count=1):
 # restart v2ray
 @logger("restart v2ray")
 def restart_v2ray(times):
-	"""
-	重新启动v2ray，使用新的配置文件
-	:param times:
-	:return:
-	"""
 	log(LOG_INFO, "restart_v2ray", "begin restart v2ray...")
 	with open(scripts_log, "a+") as fd:
 		for i in range(int(times)):
@@ -220,7 +190,7 @@ def restart_v2ray(times):
 				log(LOG_INFO, "restart_v2ray", "success restarted v2ray...")
 				return
 			else:
-				time.sleep(3)
+				time.sleep(5)
 		log(LOG_INFO, "restart_v2ray", "fail to  restart v2ray...")
 
 
@@ -239,18 +209,20 @@ def update_config():
 		serveres.append(load_config(config))
 
 	# 找一个可用的节点重新生成配置文件
-	# with open(scripts_log, "r+") as fd:
 	for it in serveres:
+		if it['ps'] in BLACK_LIST:
+			log(LOG_ERR, "update_config", "{} was in BLACK_LIST, try others".format(it['ps']))
+			continue
 		if is_reachable(it['add']):
 			log(LOG_INFO, "update_config", "ping {} success".format(it['add']))
-			write2config(it)
+			write2config(it)  # 写入配置文件
 			if os.system("systemctl restart v2ray"):
 				log(LOG_ERR, "update_config", " failed to restart v2ray.service")
-			return
+				continue
 		else:
-			log(LOG_ERR, "update_config", "ping {} failed".format(id['add']))
+			log(LOG_ERR, "update_config", "ping {} failed, try others".format(it['add']))
 	# 没有一个节点能用
-	log(LOG_ERR, update_config, "no server can be use")
+	log(LOG_ERR, "update_config", "no server can be use")
 	exit(1)
 
 
@@ -262,19 +234,16 @@ def init():
 
 
 if __name__ == "__main__":
-	"""
-	加的各种sleep目的之一防止过多请求订阅服务器然后被拉黑
-	"""
 	init()  # 初始化
 
 	cmd = 'curl -x socks5://127.0.0.1:1080 -I -m 10 -o /dev/null -s -w %{http_code} www.google.com'
-	time.sleep(10)
 
 	while True:
+		time.sleep(10)
 		res = os.popen(cmd).read()
 		if res == "200":  # 可以访问google
-			# 十分钟到三十五分钟
-			seconds = 60 * random.randint(10, 15) + random.randint(1, 300)
+			# 三十分钟到六十分钟
+			seconds = 60 * random.randint(30, 40) + random.randint(1, 600)
 			log(LOG_INFO, "main", "can access google, ready to sleep {} seconds ... ".format(seconds))
 			time.sleep(seconds)  # 等待n久后重测，与google的链接
 		else:
@@ -282,3 +251,4 @@ if __name__ == "__main__":
 			update_config()  # 更新配置信息
 			log(LOG_INFO, "main", "update success")
 			restart_v2ray(3)  # 重新启动v2ray
+			time.sleep(10)  # 等v2ray启动起来
