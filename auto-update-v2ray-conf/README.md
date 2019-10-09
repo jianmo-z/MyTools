@@ -1,4 +1,3 @@
-<<<<<<< HEAD:auto-update-v2ray-conf/README.md
 # auto-update-v2ray-conf
 
 > 自动监控v2ray节点是否可以正常使用，节点失效请求订阅服务器最新的节点数据然后进行更新配置文件重启v2ray
@@ -42,7 +41,3 @@
 > 该图是我早上到实验室查看日志发现的，说明脚本执行正常。
 
 ![夜间日志](./picture/测试脚本2.png)
-=======
-# Tools Kit
-> 工具集
->>>>>>> master:README.md
