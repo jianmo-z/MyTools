@@ -85,7 +85,7 @@ def write2config(config):
 		fd.write(json.dumps(server_config, indent=4))
 
 
-# 测试是否可以连接
+# 测试是否可达
 def is_reachable(ip, times=3, timeout=3, count=1):
 	for i in range(int(times)):
 		try:
@@ -100,6 +100,13 @@ def is_reachable(ip, times=3, timeout=3, count=1):
 		else:
 			time.sleep(1)
 	return False
+
+
+# 测试是否可访问Google
+def is_accessable():
+	command = 'curl -x socks5://127.0.0.1:1080 -I -m 10 -o /dev/null -s -w %{http_code} www.google.com'
+	ret = os.popen(command).read()
+	return True if ret == "200" else False
 
 
 # restart v2ray
@@ -134,9 +141,14 @@ def update_config():
 
 	# 找一个可用的节点重新生成配置文件
 	for it in serveres:
-		if is_reachable(it['add']):
+		if is_reachable(it['add']):  # 测试是否可达
+			logging.info("{} is reachable".format(it['add']))
 			write2config(it)  # 写入配置文件
-			return
+			restart_v2ray(3)  # 重新启动v2ray
+			time.sleep(10)  # 等待v2ray.service重启起来
+			if is_accessable():  # 测试是否可以访问google
+				return
+			logging.info("{} can't use for access google".format(it['add']))
 		else:
 			logging.info("try other server")
 			time.sleep(1)
@@ -153,20 +165,16 @@ def init():
 
 
 if __name__ == "__main__":
-	init()  # 初始化
-
-	cmd = 'curl -x socks5://127.0.0.1:1080 -I -m 10 -o /dev/null -s -w %{http_code} www.google.com'
+	# init()  # 初始化
 
 	while True:
-		time.sleep(20)
-		res = os.popen(cmd).read()
-		if res == "200":  # 可以访问google
+		if is_accessable():  # 可以访问google
 			# 三十分钟到六十分钟睡眠
-			seconds = 60 * random.randint(30, 40) + random.randint(1, 600)
+			seconds = 60 * random.randint(30, 50) + random.randint(1, 600)
 			logging.info("can access google, ready to sleep {} seconds".format(seconds))
 			time.sleep(seconds)  # 等待n久后，重测与google的链接
 		else:
 			logging.error("can't access google, try other server")
 			update_config()  # 更新配置信息
 			logging.info("success update v2ray config")
-			restart_v2ray(3)  # 重新启动v2ray
+
