@@ -10,3 +10,7 @@
 
 > [传送门](./auto-update-v2ray-conf)，用来监控节点是否有效并自动从订阅服务器拉取节点信息并更新。
 
+## xupt-school-net
+
+> [传送门](./xupt-school-net)，用来实现自动校园网验证登陆，一个`POST`请求解决。
+

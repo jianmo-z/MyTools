@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/local/bin/python3
 # -*- coding:utf-8 -*-
 import base64
 import json
@@ -15,9 +15,12 @@ config_path = "/etc/v2ray/config.json"
 scripts_log = "/opt/scripts/scripts.log"
 logging.basicConfig(filename=scripts_log, format="%(asctime)s-%(name)s-%(levelname)s-%(message)s", level=logging.INFO)
 
-green = "\033[0;32m"  # green
-red = "\033[1;31m"  # red
-reset = "\033[0m"  # reset
+net_test_lists = {
+	"https://www.google.com/",
+	"https://www.facebook.com/",
+	"https://www.youtube.com/",
+	"https://www.ted.com/",
+}
 
 
 # 获取订阅信息
@@ -35,8 +38,8 @@ Chrome/76.0.3809.132 Safari/537.36"
 		req = request.Request(url)
 		req.add_header('User-Agent', user_agent)
 		result = request.urlopen(req).read()
-	except Exception as e:
-		pass
+	except Exception:
+		return None
 	if code:
 		result = result.decode("utf-8")
 	return result
@@ -71,12 +74,28 @@ def load_config(config):
 def write2config(config):
 	with open(config_path, "r+") as fd:
 		server_config = json.loads(fd.read())
+		# unused: type
+		# used: host path add port id aid net
+		# useless: ps tls
+
+		# 设置vnext: add port id
 		server_config['outbounds'][0]['settings']['vnext'][0]['address'] = config['add']  # address
 		server_config['outbounds'][0]['settings']['vnext'][0]['port'] = int(config['port'])  # port
 		server_config['outbounds'][0]['settings']['vnext'][0]['users'][0]['id'] = config['id']  # id
+		server_config['outbounds'][0]['settings']['vnext'][0]['users'][0]['alterID'] = int(config['aid'])  # aid
+
+		# 如果net不是ws没有进行下去的意义了
+		if config['net'] != "ws":
+			exit(1)
+		
+		# 设置ws: host path
 		server_config['outbounds'][0]['streamSettings']['wsSettings']['headers']['Host'] = config['host']  # host
 		server_config['outbounds'][0]['streamSettings']['wsSettings']['path'] = config['path']  # path
+
+		# 设置tls: host
 		server_config['outbounds'][0]['streamSettings']['tlsSettings']['serverName'] = config['host']  # serverName
+
+		# 设置network:net
 		server_config['outbounds'][0]['streamSettings']['network'] = config['net']  # network
 
 		# 清空文件内容，重新写入
@@ -91,7 +110,7 @@ def is_reachable(ip, times=3, timeout=3, count=1):
 		try:
 			ret = subprocess.Popen("ping -c {} -W {} {}".format(count, timeout, ip), shell=True)
 			ret.wait(3)  # 等待三秒
-		except Exception as e:
+		except Exception:
 			# log(LOG_ERR, "is_reachable", e)
 			logging.error("{} is unreachable".format(ip))
 		if ret.returncode == 0:
@@ -104,9 +123,14 @@ def is_reachable(ip, times=3, timeout=3, count=1):
 
 # 测试是否可访问Google
 def is_accessable():
-	command = 'curl -x socks5://127.0.0.1:1080 -I -m 10 -o /dev/null -s -w %{http_code} www.google.com'
-	ret = os.popen(command).read()
-	return True if ret == "200" else False
+	global net_test_lists
+	for net in net_test_lists:
+		command = 'curl --insecure --proxy socks5://127.0.0.1:1080 -s -I -m 5 -o /dev/null -w %{{http_code}} {}'.format(net)
+		ret = os.popen(command).read()
+		logging.info("access {} http_code is:{}".format(net, ret))
+		if ret == "200":
+			return True
+	return False
 
 
 # restart v2ray
@@ -159,13 +183,17 @@ def update_config():
 
 # 初始化
 def init():
+	# 创建日志目录
+	if not os.path.exists(os.path.dirname(scripts_log)):
+		os.makedirs(os.path.dirname(scripts_log))
+
 	# 创建文件
 	if not os.path.isfile(scripts_log):
 		os.system("touch {}".format(scripts_log))
 
 
 if __name__ == "__main__":
-	# init()  # 初始化
+	init()  # 初始化
 
 	while True:
 		if is_accessable():  # 可以访问google
